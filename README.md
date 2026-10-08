@@ -2,9 +2,16 @@
 
 Exploratory analysis of daily production and water-injection data from Equinor's **Volve oil field** in the Norwegian North Sea (2007–2016). The project asks which wells carried the field, how the field changed as it matured, and how water injection relates to oil output.
 
-**Tools:** Python (pandas, NumPy, Matplotlib), Jupyter
+**Tools:** Python (pandas, NumPy, Matplotlib), Jupyter, SQL (SQLite)
 
-**Status:** Exploratory analysis complete. Decline curve forecasting is next (see [Next steps](#next-steps)).
+**Status:**
+
+| Stage | Status |
+|---|---|
+| Data cleaning, KPI engineering, exploratory analysis (notebook) | ✅ Done |
+| SQLite layer: schema, data-quality checks, analytical views | ✅ Done |
+| Decline curve forecasting | 🔜 Next |
+| Dashboard | 🔜 Planned |
 
 ---
 
@@ -103,15 +110,74 @@ Gas production followed the same pattern as oil: see `images/monthly_gas_by_well
 | Injection → oil 3 months later | 0.18 |
 
 - Oil production and water injection moved together most strongly **in the same month**, and the link weakened with longer lags.
-- This is an association, not proof of cause. Field-wide shutdowns (for example mid-2011 and Sep 2012) drop both series at once, and well availability and reservoir maturity affect both.
+
+**Robustness check (SQL, `vw_injection_correlation`).** Two things could create a correlation that means nothing: field-wide shutdowns (both series drop to near zero together) and a shared long-term decline. I tested both:
+
+| Sample | Months | Correlation |
+|---|---:|---:|
+| All months | 104 | 0.55 |
+| Only months with average producer uptime ≥ 90% | 49 | **0.76** |
+| Month-over-month changes (long-term trend removed) | 103 | **0.71** |
+
+- The link got **stronger**, not weaker, once shutdown months or the long-term trend were removed. Neither shutdowns nor the field's overall decline explain it.
+- It is still an association, not proof that injection raised production. On a platform, injection is often adjusted to match what is being produced (to replace the volume taken out of the reservoir), which would create the same pattern. Separating the two would need reservoir pressure data.
+
+---
+
+## SQL layer (`sql/`, SQLite)
+
+`python/load_sqlite.py` builds `data/volve.db` from the cleaned producer data and the raw injector records, runs the data-quality checks, and creates the views.
+
+| Object | Purpose |
+|---|---|
+| `wells` | One row per wellbore and role (F-5 and F-1 C appear as both producer and injector) |
+| `daily_production` | Fact table: one row per producer per day, with KPI columns |
+| `daily_injection` | Fact table: one row per injector per day |
+| `data_quality_log` | Results of the 10 checks in `02_checks.sql` |
+| `vw_well_kpis` | Totals, share of field oil, uptime, and water cut both volume-weighted and as a daily average |
+| `vw_injector_kpis` | Injection totals, uptime, rates, offline days |
+| `vw_field_monthly` | Field oil, gas, water, water cut and uptime by month |
+| `vw_water_cut_milestones` | First month each well crossed 50%, 80% and 90% water cut |
+| `vw_downtime_by_well_year` | Offline days, partial days and hours lost per well per year |
+| `vw_prod_vs_injection` | Monthly field oil vs. injection with uptime |
+| `vw_injection_correlation` | The robustness check above, computed in SQL |
+
+**Data-quality results**
+
+| Check | Issues | Severity |
+|---|---:|---|
+| Duplicate well-days | 0 | error |
+| Negative volumes (producers) | 0 | error |
+| Negative injection volumes | 0 | error |
+| On-stream hours above 24 | 13 | warning |
+| Oil produced with 0 on-stream hours | 1 | warning |
+| Oil rate from under 2 on-stream hours | 29 | warning |
+| Missing water volume (after negatives set to NULL) | 4 | warning |
+| Gaps in a well's daily timeline | 101 | warning |
+| Injector days with no on-stream hours recorded | 285 | warning |
+| Producer days fully offline | 1,132 | info |
+
+- **Short run times inflate rates.** Normalizing a few minutes of flow to 24 hours gives unrealistic oil rates, so the SQL KPIs average rates only over days with at least 2 on-stream hours.
+- **Two ways to measure water cut.** The notebook averages daily ratios; `vw_well_kpis` also reports the volume-weighted value (total water ÷ total liquid). They differ most on F-11 (38% vs. 49%), because its water-heavy late-life days carry more volume.
+
+**Water cut milestones (`vw_water_cut_milestones`)**
+
+| Well | Online | Water cut ≥ 50% | ≥ 80% | ≥ 90% |
+|---|---|---|---|---|
+| 15/9-F-12 | 2008-02 | 2010-06 | 2011-10 | 2013-03 |
+| 15/9-F-14 | 2008-02 | 2010-06 | 2013-06 | 2014-08 |
+| 15/9-F-1 C | 2014-04 | 2014-10 | 2015-07 | — |
+| 15/9-F-15 D | 2014-01 | 2015-12 | — | — |
+| 15/9-F-11 | 2013-07 | 2015-08 | 2016-04 | — |
+
+F-12 went from first oil to 90% water in about five years. F-1 C crossed 50% within six months of coming online.
 
 ---
 
 ## Next steps
 
 1. **Decline curve analysis:** fit Arps exponential/hyperbolic curves to F-12, F-14, and F-11, backtest against held-out 2016 data, and estimate remaining production per well.
-2. **Uptime-controlled injection check:** re-run the injection correlation excluding low-uptime months to separate the shutdown effect.
-3. **Dashboard:** well KPIs, monthly trends, and a well filter.
+2. **Dashboard:** well KPIs, monthly trends, and a well filter, built on `data/volve.db`.
 
 ---
 
@@ -126,9 +192,16 @@ volve-production-analytics/
 │       ├── production_daily_clean.csv   ← daily producer records + KPI columns
 │       ├── monthly_production.csv       ← monthly totals per producing well
 │       └── monthly_injection.csv        ← monthly totals per injector
+│   └── volve.db                         ← built by python/load_sqlite.py (not committed)
 ├── images/                              ← charts exported from the notebook
 ├── notebooks/
 │   └── 01_data_cleaning_eda.ipynb
+├── python/
+│   └── load_sqlite.py
+├── sql/
+│   ├── 01_schema.sql
+│   ├── 02_checks.sql
+│   └── 03_views.sql
 └── README.md
 ```
 
@@ -136,6 +209,12 @@ volve-production-analytics/
 
 ```
 pip install pandas numpy matplotlib openpyxl jupyter
+
+# Notebook
 cd notebooks
 jupyter notebook 01_data_cleaning_eda.ipynb
+
+# SQL layer (from the project folder)
+python python/load_sqlite.py
+sqlite3 data/volve.db "SELECT * FROM vw_well_kpis;"
 ```
