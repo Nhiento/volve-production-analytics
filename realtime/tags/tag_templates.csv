@@ -1,0 +1,13 @@
+template,source_column,unit,description,min,max,frozen_check,zero_is_bad_when_flowing
+on_stream_hours,ON_STREAM_HRS,h,Hours the well was flowing that day,0,24,no,no
+downhole_pressure,AVG_DOWNHOLE_PRESSURE,bar,Average bottomhole gauge pressure,0,450,yes,yes
+downhole_temperature,AVG_DOWNHOLE_TEMPERATURE,degC,Average bottomhole gauge temperature,0,150,yes,yes
+tubing_dp,AVG_DP_TUBING,bar,Pressure drop along the production tubing,0,350,yes,no
+annulus_pressure,AVG_ANNULUS_PRESS,bar,Average annulus pressure,0,60,yes,no
+choke_opening,AVG_CHOKE_SIZE_P,%,Production choke opening,0,100,no,no
+wellhead_pressure,AVG_WHP_P,bar,Average wellhead pressure,0,250,yes,yes
+wellhead_temperature,AVG_WHT_P,degC,Average wellhead temperature,0,150,yes,yes
+choke_dp,DP_CHOKE_SIZE,bar,Pressure drop across the choke,0,200,no,no
+oil_volume,BORE_OIL_VOL,Sm3,Oil produced that day,0,10000,no,no
+gas_volume,BORE_GAS_VOL,Sm3,Gas produced that day,0,1500000,no,no
+water_volume,BORE_WAT_VOL,Sm3,Water produced that day,0,10000,no,no
