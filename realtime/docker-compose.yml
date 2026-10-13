@@ -1,0 +1,90 @@
+# Volve real-time data platform (local demo)
+#
+#   docker compose up -d --build          start broker, historian, collector, dashboards, monitor
+#   docker compose run --rm publisher     replay the field (add flags, see README)
+#   open http://localhost:3000            Grafana (admin / volve-admin)
+#   docker compose down -v                stop and delete all data
+#
+# Demo credentials only. Never reuse these anywhere real.
+
+x-env: &influx-env
+  INFLUX_TOKEN: volve-dev-token
+
+services:
+  # MQTT broker: the "post office" every sensor message goes through
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883"]
+    volumes:
+      - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  # Time-series historian (our stand-in for PI Data Archive)
+  influxdb:
+    image: influxdb:2.7
+    ports: ["8086:8086"]
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: volve-admin
+      DOCKER_INFLUXDB_INIT_ORG: volve
+      DOCKER_INFLUXDB_INIT_BUCKET: volve          # no retention set = keep forever (data is 2008-2016)
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: volve-dev-token
+    volumes:
+      - influx-data:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 5s
+      retries: 20
+
+  # Collector: subscribes to MQTT, maps topics to tags, writes to the historian
+  telegraf:
+    image: telegraf:1.32
+    environment: *influx-env
+    volumes:
+      - ./config/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    depends_on:
+      mosquitto: {condition: service_started}
+      influxdb: {condition: service_healthy}
+    restart: unless-stopped
+
+  # Dashboards (our stand-in for PI Vision); data source and dashboard load automatically
+  grafana:
+    image: grafana/grafana:11.3.0
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: volve-admin
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/volve.json
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      influxdb: {condition: service_healthy}
+
+  # Data-quality monitor (always on, like a real platform service)
+  monitor:
+    build: .
+    command: ["python", "quality_monitor.py"]
+    environment:
+      MQTT_HOST: mosquitto
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./reports:/app/reports
+    depends_on: [mosquitto]
+    restart: unless-stopped
+
+  # Field replay (the "edge"). Run on demand:
+  #   docker compose run --rm publisher --speed 5 --start 2014-01-01
+  publisher:
+    build: .
+    entrypoint: ["python", "replay_publisher.py"]
+    environment:
+      MQTT_HOST: mosquitto
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ../data/raw:/data/raw:ro
+    depends_on: [mosquitto]
+    profiles: [replay]
+
+volumes:
+  influx-data:

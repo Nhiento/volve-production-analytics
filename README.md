@@ -2,7 +2,7 @@
 
 Exploratory analysis of daily production and water-injection data from Equinor's **Volve oil field** in the Norwegian North Sea (2007–2016). The project asks which wells carried the field, how the field changed as it matured, and how water injection relates to oil output.
 
-**Tools:** Python (pandas, NumPy, Matplotlib), Jupyter, SQL (SQLite)
+**Tools:** Python (pandas, NumPy, Matplotlib), Jupyter, SQL (SQLite), MQTT (Mosquitto), Telegraf, InfluxDB, Grafana, Docker
 
 **Status:**
 
@@ -10,8 +10,8 @@ Exploratory analysis of daily production and water-injection data from Equinor's
 |---|---|
 | Data cleaning, KPI engineering, exploratory analysis (notebook) | ✅ Done |
 | SQLite layer: schema, data-quality checks, analytical views | ✅ Done |
+| Real-time layer: MQTT feed, InfluxDB historian, Grafana dashboard, data-quality monitor ([`realtime/`](realtime/README.md)) | ✅ Done |
 | Decline curve forecasting | 🔜 Next |
-| Dashboard | 🔜 Planned |
 
 ---
 
@@ -177,7 +177,6 @@ F-12 went from first oil to 90% water in about five years. F-1 C crossed 50% wit
 ## Next steps
 
 1. **Decline curve analysis:** fit Arps exponential/hyperbolic curves to F-12, F-14, and F-11, backtest against held-out 2016 data, and estimate remaining production per well.
-2. **Dashboard:** well KPIs, monthly trends, and a well filter, built on `data/volve.db`.
 
 ---
 
@@ -202,6 +201,7 @@ volve-production-analytics/
 │   ├── 01_schema.sql
 │   ├── 02_checks.sql
 │   └── 03_views.sql
+├── realtime/                            ← live sensor feed + data-quality monitor (see realtime/README.md)
 └── README.md
 ```
 

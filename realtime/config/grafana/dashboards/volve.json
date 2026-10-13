@@ -1,0 +1,893 @@
+{
+  "uid": "volve-realtime",
+  "title": "Volve real-time wells",
+  "tags": [
+    "volve",
+    "ot",
+    "data-quality"
+  ],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "5s",
+  "time": {
+    "from": "2008-01-01T00:00:00.000Z",
+    "to": "2016-10-01T00:00:00.000Z"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "well",
+        "label": "Well",
+        "type": "custom",
+        "query": "F-12,F-14,F-11,F-1C,F-15D,F-5",
+        "current": {
+          "text": "F-12",
+          "value": "F-12"
+        },
+        "options": [
+          {
+            "text": "F-12",
+            "value": "F-12",
+            "selected": true
+          },
+          {
+            "text": "F-14",
+            "value": "F-14",
+            "selected": false
+          },
+          {
+            "text": "F-11",
+            "value": "F-11",
+            "selected": false
+          },
+          {
+            "text": "F-1C",
+            "value": "F-1C",
+            "selected": false
+          },
+          {
+            "text": "F-15D",
+            "value": "F-15D",
+            "selected": false
+          },
+          {
+            "text": "F-5",
+            "value": "F-5",
+            "selected": false
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Completeness",
+      "description": "Share of expected readings (field days x 12 tags) that arrived with a value.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: 2000-01-01T00:00:00Z)\n  |> filter(fn: (r) => r._measurement == \"dq_summary\" and r.well == \"${well}\" and r._field == \"completeness_pct\")\n  |> last()\n  |> keep(columns: [\"_value\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 90
+              },
+              {
+                "color": "green",
+                "value": 98
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Validity",
+      "description": "Share of arrived values that passed every check (range, unit, bad zero, frozen).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: 2000-01-01T00:00:00Z)\n  |> filter(fn: (r) => r._measurement == \"dq_summary\" and r.well == \"${well}\" and r._field == \"validity_pct\")\n  |> last()\n  |> keep(columns: [\"_value\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 90
+              },
+              {
+                "color": "green",
+                "value": 98
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Issues flagged",
+      "description": "Total data-quality events for this well since the monitor started.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: 2000-01-01T00:00:00Z)\n  |> filter(fn: (r) => r._measurement == \"dq_summary\" and r.well == \"${well}\" and r._field == \"issues_total\")\n  |> last()\n  |> keep(columns: [\"_value\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Latency p95",
+      "description": "95th percentile time from the edge sending a reading to the monitor receiving it.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: 2000-01-01T00:00:00Z)\n  |> filter(fn: (r) => r._measurement == \"dq_summary\" and r.well == \"${well}\" and r._field == \"latency_ms_p95\")\n  |> last()\n  |> keep(columns: [\"_value\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 250
+              },
+              {
+                "color": "red",
+                "value": 1000
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Feed",
+      "description": "DOWN when nothing has arrived for 5 replay intervals.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: 2000-01-01T00:00:00Z)\n  |> filter(fn: (r) => r._measurement == \"dq_summary\" and r.well == \"${well}\" and r._field == \"feed_ok\")\n  |> last()\n  |> keep(columns: [\"_value\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "OK",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Publisher",
+      "description": "From the publisher's MQTT Last Will: DOWN means the edge disconnected without saying goodbye.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: 2000-01-01T00:00:00Z)\n  |> filter(fn: (r) => r._measurement == \"dq_summary\" and r.well == \"${well}\" and r._field == \"publisher_online\")\n  |> last()\n  |> keep(columns: [\"_value\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "OK",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Downhole pressure, with flagged readings",
+      "description": "Red points are readings the quality monitor rejected. On F-12, the gauge reads 0 bar while the well is flowing from 2010 on.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"sensor\" and r._field == \"value\" and r.well == \"${well}\")\n  |> filter(fn: (r) => contains(value: r.tag, set: [\"downhole_pressure\"]))\n  |> keep(columns: [\"_start\", \"_stop\", \"_time\", \"_value\", \"tag\"])\n  |> group(columns: [\"tag\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"dq_event\" and r._field == \"value\" and r.well == \"${well}\")\n  |> filter(fn: (r) => r.tag == \"downhole_pressure\")\n  |> keep(columns: [\"_time\", \"_value\", \"check\"])\n  |> group(columns: [\"check\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "spanNulls": false,
+            "showPoints": "never"
+          },
+          "displayName": "${__field.labels.tag}",
+          "unit": "pressurebar"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.drawStyle",
+                "value": "points"
+              },
+              {
+                "id": "custom.pointSize",
+                "value": 6
+              },
+              {
+                "id": "displayName",
+                "value": "flagged: ${__field.labels.check}"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Wellhead, tubing and annulus pressures",
+      "description": "",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"sensor\" and r._field == \"value\" and r.well == \"${well}\")\n  |> filter(fn: (r) => contains(value: r.tag, set: [\"wellhead_pressure\", \"tubing_dp\", \"annulus_pressure\", \"choke_dp\"]))\n  |> keep(columns: [\"_start\", \"_stop\", \"_time\", \"_value\", \"tag\"])\n  |> group(columns: [\"tag\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "spanNulls": false,
+            "showPoints": "never"
+          },
+          "displayName": "${__field.labels.tag}",
+          "unit": "pressurebar"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Temperatures",
+      "description": "",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"sensor\" and r._field == \"value\" and r.well == \"${well}\")\n  |> filter(fn: (r) => contains(value: r.tag, set: [\"downhole_temperature\", \"wellhead_temperature\"]))\n  |> keep(columns: [\"_start\", \"_stop\", \"_time\", \"_value\", \"tag\"])\n  |> group(columns: [\"tag\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "spanNulls": false,
+            "showPoints": "never"
+          },
+          "displayName": "${__field.labels.tag}",
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Choke opening and on-stream hours",
+      "description": "",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 13,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"sensor\" and r._field == \"value\" and r.well == \"${well}\")\n  |> filter(fn: (r) => contains(value: r.tag, set: [\"choke_opening\", \"on_stream_hours\"]))\n  |> keep(columns: [\"_start\", \"_stop\", \"_time\", \"_value\", \"tag\"])\n  |> group(columns: [\"tag\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "spanNulls": false,
+            "showPoints": "never"
+          },
+          "displayName": "${__field.labels.tag}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Water cut",
+      "description": "water / (oil + water), computed in the query from the oil_volume and water_volume tags.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 13,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"sensor\" and r._field == \"value\" and r.well == \"${well}\")\n  |> filter(fn: (r) => r.tag == \"oil_volume\" or r.tag == \"water_volume\")\n  |> keep(columns: [\"_start\", \"_stop\", \"_time\", \"_value\", \"tag\"])\n  |> group()\n  |> pivot(rowKey: [\"_time\", \"_start\", \"_stop\"], columnKey: [\"tag\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.oil_volume and exists r.water_volume and r.oil_volume + r.water_volume > 0.0)\n  |> map(fn: (r) => ({_start: r._start, _stop: r._stop, _time: r._time,\n                      _value: 100.0 * r.water_volume / (r.oil_volume + r.water_volume)}))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "spanNulls": false,
+            "showPoints": "never"
+          },
+          "displayName": "water cut",
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Daily oil and water volumes",
+      "description": "",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"sensor\" and r._field == \"value\" and r.well == \"${well}\")\n  |> filter(fn: (r) => contains(value: r.tag, set: [\"oil_volume\", \"water_volume\"]))\n  |> keep(columns: [\"_start\", \"_stop\", \"_time\", \"_value\", \"tag\"])\n  |> group(columns: [\"tag\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "spanNulls": false,
+            "showPoints": "never"
+          },
+          "displayName": "${__field.labels.tag}",
+          "unit": "m3"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Data-quality events per month, by check",
+      "description": "How many readings each check flagged per month for this well.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 21,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"dq_event\" and r._field == \"detail\" and r.well == \"${well}\")\n  |> keep(columns: [\"_start\", \"_stop\", \"_time\", \"_value\", \"check\"])\n  |> group(columns: [\"check\"])\n  |> aggregateWindow(every: 1mo, fn: count, createEmpty: false)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "spanNulls": false,
+            "showPoints": "never",
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "displayName": "${__field.labels.check}"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "table",
+      "title": "Issues for this well (tag x check)",
+      "description": "Readings flagged in the selected time range.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"dq_event\" and r._field == \"detail\" and r.well == \"${well}\")\n  |> group(columns: [\"tag\", \"check\"])\n  |> count()\n  |> group()\n  |> keep(columns: [\"tag\", \"check\", \"_value\"])\n  |> sort(columns: [\"_value\"], desc: true)\n  |> rename(columns: {_value: \"readings flagged\"})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      }
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "Field scorecard (all wells)",
+      "description": "Latest scorecard published by the monitor for every well.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 29,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"volve\")\n  |> range(start: 2000-01-01T00:00:00Z)\n  |> filter(fn: (r) => r._measurement == \"dq_summary\")\n  |> filter(fn: (r) => contains(value: r._field, set: [\"completeness_pct\", \"validity_pct\", \"issues_total\", \"stale_tags\"]))\n  |> group(columns: [\"well\", \"_field\"])\n  |> last()\n  |> group()\n  |> pivot(rowKey: [\"well\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> keep(columns: [\"well\", \"completeness_pct\", \"validity_pct\", \"issues_total\", \"stale_tags\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      }
+    }
+  ]
+}
