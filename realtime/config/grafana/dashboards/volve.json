@@ -878,7 +878,7 @@
             "type": "influxdb",
             "uid": "influxdb"
           },
-          "query": "from(bucket: \"volve\")\n  |> range(start: 2000-01-01T00:00:00Z)\n  |> filter(fn: (r) => r._measurement == \"dq_summary\")\n  |> filter(fn: (r) => contains(value: r._field, set: [\"completeness_pct\", \"validity_pct\", \"issues_total\", \"stale_tags\"]))\n  |> group(columns: [\"well\", \"_field\"])\n  |> last()\n  |> group()\n  |> pivot(rowKey: [\"well\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> keep(columns: [\"well\", \"completeness_pct\", \"validity_pct\", \"issues_total\", \"stale_tags\"])"
+          "query": "from(bucket: \"volve\")\n  |> range(start: 2000-01-01T00:00:00Z)\n  |> filter(fn: (r) => r._measurement == \"dq_summary\")\n  |> filter(fn: (r) => contains(value: r._field, set: [\"completeness_pct\", \"validity_pct\", \"issues_total\", \"stale_tags\"]))\n  |> toFloat()\n  |> group(columns: [\"well\", \"_field\"])\n  |> last()\n  |> group()\n  |> pivot(rowKey: [\"well\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> keep(columns: [\"well\", \"completeness_pct\", \"validity_pct\", \"issues_total\", \"stale_tags\"])"
         }
       ],
       "fieldConfig": {

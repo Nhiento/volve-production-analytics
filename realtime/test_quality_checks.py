@@ -80,7 +80,7 @@ def test_missing_value_counts_against_completeness():
     flowing(m, "F-5", T0)
     m.on_reading("F-5", "downhole_pressure", reading(None, T0, quality="no_data"))
     assert checks(m, "F-5", "downhole_pressure") == {"missing_value": 1}
-    assert m.good_values["F-5"] == 1   # only on_stream_hours had a value
+    assert round(m.completeness("F-5"), 6) == round(100 / 12, 6)  # 1 of 12 expected readings had a value
 
 
 def test_stale_tag_only_when_rest_of_well_keeps_reporting():
@@ -105,3 +105,26 @@ def test_unknown_tag_is_flagged():
     m = new_monitor()
     m.on_reading("F-12", "mystery_sensor", reading(1.0, T0))
     assert checks(m, "F-12", "mystery_sensor") == {"unknown_tag": 1}
+
+
+def test_replaying_the_same_dates_does_not_double_count():
+    m = new_monitor()
+    for _ in range(3):                      # the same three days, replayed three times
+        for day in range(3):
+            ts = T0 + day * DAY
+            flowing(m, "F-12", ts)
+            m.on_reading("F-12", "downhole_pressure", reading(0.0, ts))
+    assert m.well_days["F-12"] == 3
+    assert round(m.completeness("F-12"), 6) == round(2 / 12 * 100, 6)      # 2 of 12 templates sent, every day
+    assert m.validity("F-12") == 50.0                    # on_stream_hours valid, pressure bad
+    assert checks(m, "F-12", "downhole_pressure") == {"bad_zero": 3}
+
+
+def test_restarted_replay_does_not_fake_a_frozen_sensor():
+    m = new_monitor()
+    for start in (0, 0):                    # replay day 0-1, then start over at day 0
+        for day in range(start, start + 2):
+            ts = T0 + day * DAY
+            flowing(m, "F-11", ts)
+            m.on_reading("F-11", "wellhead_pressure", reading(40.0 + day, ts))
+    assert checks(m, "F-11", "wellhead_pressure") == {}

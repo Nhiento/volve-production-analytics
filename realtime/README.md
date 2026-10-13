@@ -58,6 +58,16 @@ A shorter replay: `docker compose run --rm publisher --speed 10 --start 2014-01-
 
 Stop and wipe everything: `docker compose down -v`
 
+**Start clean before screenshots or a demo.** InfluxDB keeps everything you have ever
+replayed, including fault-demo data (the psi spike from `--wrong-unit`). Wipe it and do
+one full replay:
+
+```bash
+docker compose down -v
+docker compose up -d --build
+docker compose run --rm publisher --speed 10
+```
+
 ### Break it on purpose
 
 ```bash
