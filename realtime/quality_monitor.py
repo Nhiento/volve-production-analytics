@@ -11,6 +11,10 @@ Checks on every message:
   frozen          the same non-zero value 3 readings in a row while flowing
   latency         seconds between the edge sending and us receiving
 
+Scores are keyed by (well, tag, field date), so replaying dates you already replayed
+updates those readings instead of counting them twice; issue counts are distinct
+field days per tag and check.
+
 Checks on a timer:
   stale_tag       a tag stopped arriving while the rest of its well keeps reporting
   well_gap        a whole well skipped one or more days
@@ -64,16 +68,21 @@ class QualityMonitor:
         # Per-tag state
         self.last_value: dict[tuple, float] = {}
         self.repeat_run: Counter = Counter()
-        self.tag_last_ts: dict[tuple, int] = {}
+        self.prev_ts: dict[tuple, int] = {}            # last field date processed, to spot a restarted replay
+        self.tag_last_ts: dict[tuple, int] = {}        # newest field date seen for the tag
         self.stale: set[tuple] = set()
 
         # Per-well state
         self.well_last_ts: dict[str, int] = {}
         self.well_first_ts: dict[str, int] = {}
         self.flowing: dict[tuple, bool] = {}          # (well, ts) -> on stream?
-        self.good_values: Counter = Counter()          # well -> readings that had a value
-        self.valid_values: Counter = Counter()         # well -> readings that had a value AND passed every check
-        self.well_days: Counter = Counter()            # well -> distinct days seen
+        self.days_seen: set[tuple] = set()             # (well, ts) field days received
+        self.well_days: Counter = Counter()            # well -> distinct field days
+
+        # Scoring is keyed by (well, tag, field date) so replaying the same dates again
+        # updates readings instead of counting them twice. The latest replay wins.
+        self.reading_status: dict[tuple, str] = {}     # -> "valid", "invalid" or "missing"
+        self.status_counts: Counter = Counter()        # (well, status) -> readings
 
         # Feed state
         self.latencies: deque = deque(maxlen=2000)
@@ -83,22 +92,45 @@ class QualityMonitor:
         self.feed_alarm = False
 
         # Findings
-        self.counts: Counter = Counter()               # (well, template, check) -> count
+        self.counts: Counter = Counter()               # (well, template, check) -> distinct field days flagged
+        self.events_seen: set[tuple] = set()           # (well, template, check, ts)
         self.first_seen: dict[tuple, int] = {}
         self.last_seen: dict[tuple, int] = {}
         self.examples: dict[tuple, str] = {}
         self.total_flags = 0
 
+    # ---------- scoring helpers ----------
+    def readings_with_value(self, well: str) -> int:
+        return self.status_counts[(well, "valid")] + self.status_counts[(well, "invalid")]
+
+    def completeness(self, well: str) -> float:
+        expected = self.well_days[well] * len(self.templates)
+        return 100 * self.readings_with_value(well) / expected if expected else 0.0
+
+    def validity(self, well: str) -> float:
+        n = self.readings_with_value(well)
+        return 100 * self.status_counts[(well, "valid")] / n if n else 0.0
+
+    def set_status(self, well: str, template: str, ts: int, status: str) -> None:
+        key = (well, template, ts)
+        old = self.reading_status.get(key)
+        if old is not None:
+            self.status_counts[(well, old)] -= 1
+        self.reading_status[key] = status
+        self.status_counts[(well, status)] += 1
+
     # ---------- recording ----------
     def flag(self, well: str, template: str, check: str, ts: int, detail: str, value=None) -> None:
         key = (well, template, check)
-        if key not in self.counts:
-            print(f"  NEW ISSUE  {iso(ts)}  {well:<6} {template:<22} {check:<14} {detail}")
-            self.examples[key] = detail
-        self.counts[key] += 1
         self.total_flags += 1
-        self.first_seen.setdefault(key, ts)
-        self.last_seen[key] = ts
+        if (well, template, check, ts) not in self.events_seen:   # count each field day once
+            self.events_seen.add((well, template, check, ts))
+            if key not in self.counts:
+                print(f"  NEW ISSUE  {iso(ts)}  {well:<6} {template:<22} {check:<14} {detail}")
+                self.examples[key] = detail
+            self.counts[key] += 1
+            self.first_seen[key] = min(self.first_seen.get(key, ts), ts)
+            self.last_seen[key] = max(self.last_seen.get(key, ts), ts)
 
         event = {"ts": ts, "check": check, "detail": detail}
         if value is not None:
@@ -129,14 +161,22 @@ class QualityMonitor:
                     missing = (ts - prev) // DAY - 1
                     self.flag(well, "_well", "well_gap", ts, f"{missing} day(s) with no data before this date")
                 self.well_last_ts[well] = ts
-                self.well_first_ts.setdefault(well, ts)
+            self.well_first_ts[well] = min(self.well_first_ts.get(well, ts), ts)
+            if (well, ts) not in self.days_seen:
+                self.days_seen.add((well, ts))
                 self.well_days[well] += 1
 
             key = (well, template_name)
-            self.tag_last_ts[key] = ts
+            self.tag_last_ts[key] = max(self.tag_last_ts.get(key, ts), ts)
             if key in self.stale:
                 self.stale.discard(key)
                 print(f"  RECOVERED  {iso(ts)}  {well:<6} {template_name}")
+
+            # A replay that starts over from an earlier date breaks the day-to-day sequence
+            if ts <= self.prev_ts.get(key, -1):
+                self.repeat_run[key] = 0
+                self.last_value.pop(key, None)
+            self.prev_ts[key] = ts
 
             value = msg.get("value")
             flags_before = self.total_flags
@@ -149,14 +189,15 @@ class QualityMonitor:
                 self.flag(well, template_name, "unit_mismatch", ts,
                           f"got {msg.get('unit')}, standard is {template.unit}", value)
                 self.last_value.pop(key, None)
+                self.set_status(well, template_name, ts, "invalid" if value is not None else "missing")
                 return
 
             # 2. Completeness of the value itself
             if msg.get("quality") != "good" or value is None:
                 self.flag(well, template_name, "missing_value", ts, "source sent no value")
                 self.repeat_run[key] = 0
+                self.set_status(well, template_name, ts, "missing")
                 return
-            self.good_values[well] += 1
 
             # 3. Physical range from the registry
             if not (template.min <= value <= template.max):
@@ -177,8 +218,7 @@ class QualityMonitor:
                 self.repeat_run[key] = 0
             self.last_value[key] = value
 
-            if self.total_flags == flags_before:
-                self.valid_values[well] += 1
+            self.set_status(well, template_name, ts, "valid" if self.total_flags == flags_before else "invalid")
 
     # ---------- on a timer ----------
     def periodic(self) -> None:
@@ -211,13 +251,11 @@ class QualityMonitor:
             lat_p95 = lat[int(0.95 * (len(lat) - 1))] * 1000 if lat else 0.0
 
             for well, well_ts in self.well_last_ts.items():
-                expected = self.well_days[well] * len(self.templates)
                 open_issues = sum(1 for (w, _) in self.stale if w == well)
                 summary = {
                     "ts": well_ts,
-                    "completeness_pct": round(100 * self.good_values[well] / expected, 2) if expected else 0,
-                    "validity_pct": round(100 * self.valid_values[well] / self.good_values[well], 2)
-                                    if self.good_values[well] else 0,
+                    "completeness_pct": round(self.completeness(well), 2),
+                    "validity_pct": round(self.validity(well), 2),
                     "issues_total": sum(c for (w, _, _), c in self.counts.items() if w == well),
                     "stale_tags": open_issues,
                     "latency_ms_avg": round(lat_avg, 2),
@@ -248,11 +286,9 @@ class QualityMonitor:
         for well in self.assets:
             if not self.well_days[well]:
                 continue
-            expected = self.well_days[well] * len(self.templates)
             issues = sum(c for (w, _, _), c in self.counts.items() if w == well)
-            valid = 100 * self.valid_values[well] / self.good_values[well] if self.good_values[well] else 0
             lines.append(f"| {well} | {self.well_days[well]:,} | "
-                         f"{100 * self.good_values[well] / expected:.1f}% | {valid:.1f}% | {issues:,} |")
+                         f"{self.completeness(well):.1f}% | {self.validity(well):.1f}% | {issues:,} |")
         if lat:
             lines += ["", f"Transport latency: average {statistics.fmean(lat) * 1000:.1f} ms, "
                           f"p95 {lat[int(0.95 * (len(lat) - 1))] * 1000:.1f} ms "
