@@ -1,8 +1,16 @@
 # Volve Field Production Analytics
 
-Exploratory analysis of daily production and water-injection data from Equinor's **Volve oil field** in the Norwegian North Sea (2007–2016). The project asks which wells carried the field, how the field changed as it matured, and how water injection relates to oil output.
+Production analytics on Equinor's **Volve oil field** in the Norwegian North Sea (2007–2016): which wells carried the field, how it changed as it matured, how water injection relates to oil output, and how much oil was left when it shut in. The same data is also replayed as a live sensor feed with a data-quality monitor, the way an operator's historian would receive it.
 
-**Tools:** Python (pandas, NumPy, Matplotlib), Jupyter, SQL (SQLite), MQTT (Mosquitto), Telegraf, InfluxDB, Grafana, Docker
+**Tools:** Python (pandas, NumPy, SciPy, Matplotlib), Jupyter, SQL (SQLite), MQTT (Mosquitto), Telegraf, InfluxDB, Grafana, Docker
+
+## Highlights
+
+- **Found a dead downhole gauge.** Replaying nine years of data through the real-time quality monitor flagged F-12's downhole pressure and temperature reading exactly 0 for **1,907 producing days** (Oct 2010 to Aug 2016), on the field's biggest well. ([details](realtime/README.md))
+- **Forecast each well's decline and backtested it.** A simple exponential curve on a recent window predicted 2016 within **7–30%** per well, against **53–105%** for a naive "same as last quarter" baseline.
+- **Estimated the oil left at shut-in.** F-12 and F-14 were at or near the economic limit; **F-11 held almost all the remaining oil** (~100,000 Sm³ base case). ([details](#5-decline-curves-and-remaining-oil))
+- **Stress-tested a correlation instead of just reporting it.** The injection/production link got *stronger* (0.55 → 0.76) after removing shutdown months, so shutdowns weren't faking it.
+- **Built the pipeline end to end:** Excel → pandas → SQLite with 10 data-quality checks → MQTT → InfluxDB → Grafana, all in Docker.
 
 **Status:**
 
@@ -11,7 +19,7 @@ Exploratory analysis of daily production and water-injection data from Equinor's
 | Data cleaning, KPI engineering, exploratory analysis (notebook) | ✅ Done |
 | SQLite layer: schema, data-quality checks, analytical views | ✅ Done |
 | Real-time layer: MQTT feed, InfluxDB historian, Grafana dashboard, data-quality monitor ([`realtime/`](realtime/README.md)) | ✅ Done |
-| Decline curve forecasting | 🔜 Next |
+| Decline curve forecasting with backtest (`notebooks/02_decline_curve_analysis.ipynb`) | ✅ Done |
 
 ---
 
@@ -21,6 +29,7 @@ Exploratory analysis of daily production and water-injection data from Equinor's
 2. How did oil, gas, and water output change for each well over the field's life?
 3. How well did the two water-injection wells perform?
 4. Is water injection associated with oil production, and does the relationship hold with a time lag?
+5. Can a decline curve forecast each well, and how much oil was left when the field shut in?
 
 ---
 
@@ -122,6 +131,44 @@ Gas production followed the same pattern as oil: see `images/monthly_gas_by_well
 - The link got **stronger**, not weaker, once shutdown months or the long-term trend were removed. Neither shutdowns nor the field's overall decline explain it.
 - It is still an association, not proof that injection raised production. On a platform, injection is often adjusted to match what is being produced (to replace the volume taken out of the reservoir), which would create the same pattern. Separating the two would need reservoir pressure data.
 
+### 5. Decline curves and remaining oil
+
+Notebook: `notebooks/02_decline_curve_analysis.ipynb` · code: `python/decline_curves.py`
+
+**Method.** Monthly oil rate per *producing* day (so shutdowns don't look like decline), fit with Arps exponential and hyperbolic curves in log space. Each fit starts at the peak after the well's last restart and looks back at most 24 months.
+
+**Backtest:** fit on data before 2016, scored on 2016 (mean absolute % error on monthly rate).
+
+![Decline curve backtest](images/decline_backtest.png)
+
+| Well | Fit from | Exponential | Hyperbolic | Naive (last 3 months held flat) |
+|---|---|---:|---:|---:|
+| 15/9-F-12 | 2015-01 | **25%** | 25% | 94% |
+| 15/9-F-14 | 2014-01 | **7%** | 18% | 53% |
+| 15/9-F-11 | 2015-04 | **30%** | 43% | 105% |
+
+- **Both curves beat the naive baseline on every well**, and the simpler exponential matched or beat the hyperbolic every time. With 9–24 monthly points, the extra parameter mostly fits noise.
+- **The fit window mattered more than the model.** Fitting F-14 from its 2008 peak instead of the last 24 months raised the error from 7% to 65%, because its decline steepened as water cut rose.
+- **F-12 needed a restart rule.** Its rate jumped from ~180 to ~860 Sm³/d in January 2015 after a shut-in (probably a well intervention; the data doesn't record it), so fitting across that jump would be meaningless.
+- **Where it missed:** F-12 and F-11 declined faster in 2016 than predicted. F-11 lost 31% of its rate in a single month (April 2016), a step change no smooth curve anticipates.
+
+**Remaining oil at the 2016 shut-in** (exponential, refit on all data; calendar volumes use each well's last-12-month uptime, ~93%). The dataset has no cost data, so the economic limit is an assumption, shown at three levels (Sm³):
+
+| Well | Last rate (Sm³/d) | Annual decline | Limit 50 Sm³/d | **Limit 100 Sm³/d** | Limit 150 Sm³/d |
+|---|---:|---:|---:|---:|---:|
+| 15/9-F-12 | 121 | 69% | 25,200 | **10,300** | 0 |
+| 15/9-F-14 | 106 | 50% | 24,300 | **0** | 0 |
+| 15/9-F-11 | 527 | 65% | 118,500 | **101,700** | 87,600 |
+| **Total** | | | 168,000 | **112,000 (~0.7 MMbbl)** | 87,600 |
+
+![Decline curve forecast](images/decline_forecast.png)
+
+- **F-12 and F-14 were finished.** F-14 was already at ~100 Sm³/d and F-12 would have reached it within about three months.
+- **F-11 was the only well with meaningful oil left.** The base case is about 100,000 Sm³. But F-11's rate held flat at ~470–530 Sm³/d for its last six months; if that was the new normal, the estimate rises to about **737,000 Sm³**. That one judgment call moves the answer 7×, so I report it as a range rather than a single number.
+- **In context:** the base case is about 1% of what these three wells had already produced.
+
+**Limits.** No reservoir pressure (and F-12's downhole gauge was dead from 2010, as the real-time monitor found), no cost data, no intervention records, and no platform constraints such as water handling. This is a first-pass screen, not a reserves estimate.
+
 ---
 
 ## SQL layer (`sql/`, SQLite)
@@ -174,9 +221,10 @@ F-12 went from first oil to 90% water in about five years. F-1 C crossed 50% wit
 
 ---
 
-## Next steps
+## Possible extensions
 
-1. **Decline curve analysis:** fit Arps exponential/hyperbolic curves to F-12, F-14, and F-11, backtest against held-out 2016 data, and estimate remaining production per well.
+1. **Water-oil ratio forecasting:** for a waterflooded field, water-oil ratio against cumulative oil is often a steadier predictor than rate against time, and could explain the accelerating declines.
+2. **Field-level economic limit:** on an offshore platform the fixed cost is shared, so the real shut-in point is a field-level decision, not a per-well one.
 
 ---
 
@@ -187,16 +235,19 @@ volve-production-analytics/
 ├── data/
 │   ├── raw/
 │   │   └── Volve production data.xlsx
-│   └── processed/
-│       ├── production_daily_clean.csv   ← daily producer records + KPI columns
-│       ├── monthly_production.csv       ← monthly totals per producing well
-│       └── monthly_injection.csv        ← monthly totals per injector
+│   ├── processed/
+│   │   ├── production_daily_clean.csv   ← daily producer records + KPI columns
+│   │   ├── monthly_production.csv       ← monthly totals per producing well
+│   │   ├── monthly_injection.csv        ← monthly totals per injector
+│   │   └── decline_*.csv                ← backtest, forecast and F-11 sensitivity results
 │   └── volve.db                         ← built by python/load_sqlite.py (not committed)
 ├── images/                              ← charts exported from the notebook
 ├── notebooks/
-│   └── 01_data_cleaning_eda.ipynb
+│   ├── 01_data_cleaning_eda.ipynb
+│   └── 02_decline_curve_analysis.ipynb
 ├── python/
-│   └── load_sqlite.py
+│   ├── load_sqlite.py
+│   └── decline_curves.py
 ├── sql/
 │   ├── 01_schema.sql
 │   ├── 02_checks.sql
@@ -208,7 +259,7 @@ volve-production-analytics/
 ## How to run
 
 ```
-pip install pandas numpy matplotlib openpyxl jupyter
+pip install pandas numpy scipy matplotlib openpyxl jupyter
 
 # Notebook
 cd notebooks
@@ -217,4 +268,7 @@ jupyter notebook 01_data_cleaning_eda.ipynb
 # SQL layer (from the project folder)
 python python/load_sqlite.py
 sqlite3 data/volve.db "SELECT * FROM vw_well_kpis;"
+
+# Decline curves (rebuilds the decline_*.csv results and both charts)
+python python/decline_curves.py
 ```
