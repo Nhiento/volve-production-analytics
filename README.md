@@ -12,6 +12,9 @@ Production analytics on Equinor's **Volve oil field** in the Norwegian North Sea
 - **Stress-tested a correlation instead of just reporting it.** The injection/production link got *stronger* (0.55 → 0.76) after removing shutdown months, so shutdowns weren't faking it.
 - **Built the pipeline end to end:** Excel → pandas → SQLite with 10 data-quality checks → MQTT → InfluxDB → Grafana, all in Docker.
 
+![Grafana dashboard for well F-12: data-quality scorecard and downhole pressure dropping to zero in October 2010](images/grafana_dashboard_f12.png)
+*The live Grafana dashboard for F-12 after replaying 2008–2016. Downhole pressure (left) drops to 0 in October 2010 and every later reading is flagged (red), which is why validity is only 89.5%.*
+
 **Status:**
 
 | Stage | Status |
