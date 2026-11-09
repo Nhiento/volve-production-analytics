@@ -17,6 +17,8 @@ Volve Excel → replay_publisher.py → Mosquitto (MQTT) → Telegraf → Influx
 
 ## What it found in the real data
 
+![Grafana dashboard for well F-12](../images/grafana_dashboard_f12.png)
+
 Replaying all 9,143 producing well-days (2008–2016):
 
 | Well | Completeness | Validity | Main finding |
