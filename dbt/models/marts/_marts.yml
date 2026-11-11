@@ -1,0 +1,68 @@
+version: 2
+
+models:
+  - name: dim_wells
+    description: One row per wellbore and role (producer or injector), with its active date range.
+    tests:
+      - unique_combination:
+          arguments:
+            columns: [well_name, role]
+    columns:
+      - name: role
+        tests:
+          - accepted_values:
+              arguments:
+                values: [producer, injector]
+
+  - name: well_kpis
+    description: Producer KPIs per well (volumes, share of field oil, uptime, water cut, rate).
+    columns:
+      - name: well_name
+        tests: [unique, not_null]
+      - name: share_of_field_oil_pct
+        tests: [not_negative, {not_above: {arguments: {max_value: 100}}}]
+
+  - name: injector_kpis
+    description: Injector KPIs per well (volume injected, uptime, rate, offline days).
+    columns:
+      - name: well_name
+        tests: [unique, not_null]
+
+  - name: field_monthly
+    description: Field totals per month with water cut and average producer uptime.
+    columns:
+      - name: month
+        tests: [unique, not_null]
+      - name: water_cut_pct
+        tests: [not_negative, {not_above: {arguments: {max_value: 100}}}]
+
+  - name: water_cut_milestones
+    description: First month each producer's water cut passed 50%, 80% and 90%.
+    columns:
+      - name: well_name
+        tests: [unique, not_null]
+
+  - name: downtime_by_well_year
+    description: Offline days, partial days and hours lost per producer per year.
+    tests:
+      - unique_combination:
+          arguments:
+            columns: [well_name, year]
+
+  - name: prod_vs_injection
+    description: Monthly field oil vs. water injected, with producer uptime.
+    columns:
+      - name: month
+        tests: [unique, not_null]
+
+  - name: injection_correlation
+    description: >
+      Oil vs. injection correlation across all months, high-uptime months only,
+      and month-over-month changes. The robustness check behind README finding 4.
+    columns:
+      - name: sample
+        tests:
+          - unique
+          - accepted_values:
+              arguments:
+                values: [all_months, uptime_ge_90, monthly_changes]

@@ -1,8 +1,10 @@
 # Volve Field Production Analytics
 
+[![CI](https://github.com/Nhiento/volve-production-analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/Nhiento/volve-production-analytics/actions/workflows/ci.yml)
+
 Production analytics on Equinor's **Volve oil field** in the Norwegian North Sea (2007–2016): which wells carried the field, how it changed as it matured, how water injection relates to oil output, and how much oil was left when it shut in. The same data is also replayed as a live sensor feed with a data-quality monitor, the way an operator's historian would receive it.
 
-**Tools:** Python (pandas, NumPy, SciPy, Matplotlib), Jupyter, SQL (SQLite), MQTT (Mosquitto), Telegraf, InfluxDB, Grafana, Docker
+**Tools:** Python (pandas, NumPy, SciPy, Matplotlib), Jupyter, SQL (DuckDB, SQLite), dbt, pytest, GitHub Actions, MQTT (Mosquitto), Telegraf, InfluxDB, Grafana, Docker
 
 ## Highlights
 
@@ -10,7 +12,7 @@ Production analytics on Equinor's **Volve oil field** in the Norwegian North Sea
 - **Forecast each well's decline and backtested it.** A simple exponential curve on a recent window predicted 2016 within **7–30%** per well, against **53–105%** for a naive "same as last quarter" baseline.
 - **Estimated the oil left at shut-in.** F-12 and F-14 were at or near the economic limit; **F-11 held almost all the remaining oil** (~100,000 Sm³ base case). ([details](#5-decline-curves-and-remaining-oil))
 - **Stress-tested a correlation instead of just reporting it.** The injection/production link got *stronger* (0.55 → 0.76) after removing shutdown months, so shutdowns weren't faking it.
-- **Built the pipeline end to end:** Excel → pandas → SQLite with 10 data-quality checks → MQTT → InfluxDB → Grafana, all in Docker.
+- **Built two pipelines from one source.** Batch: Excel → pandas cleaning script → dbt models in DuckDB with 49 data tests, run by GitHub Actions on every push. Real-time: Excel replayed → MQTT → InfluxDB → Grafana with a live quality monitor, all in Docker.
 
 ![Grafana dashboard for well F-12: data-quality scorecard and downhole pressure dropping to zero in October 2010](images/grafana_dashboard_f12.png)
 *The live Grafana dashboard for F-12 after replaying 2008–2016. Downhole pressure (left) drops to 0 in October 2010 and every later reading is flagged (red), which is why validity is only 89.5%.*
@@ -21,6 +23,7 @@ Production analytics on Equinor's **Volve oil field** in the Norwegian North Sea
 |---|---|
 | Data cleaning, KPI engineering, exploratory analysis (notebook) | ✅ Done |
 | SQLite layer: schema, data-quality checks, analytical views | ✅ Done |
+| Batch pipeline: cleaning script, dbt + DuckDB warehouse, data tests, CI ([`dbt/`](#batch-pipeline-dbt--duckdb)) | ✅ Done |
 | Real-time layer: MQTT feed, InfluxDB historian, Grafana dashboard, data-quality monitor ([`realtime/`](realtime/README.md)) | ✅ Done |
 | Decline curve forecasting with backtest (`notebooks/02_decline_curve_analysis.ipynb`) | ✅ Done |
 
@@ -174,7 +177,32 @@ Notebook: `notebooks/02_decline_curve_analysis.ipynb` · code: `python/decline_c
 
 ---
 
+## Batch pipeline (dbt + DuckDB)
+
+The analysis above started in notebooks. The batch pipeline makes it repeatable: one command rebuilds everything from the raw file, and every run is tested.
+
+```
+raw Excel ──► python/clean.py ──► data/processed/*.csv ──► dbt (DuckDB) ──► staging views ──► mart tables
+                 7 unit tests                                49 data tests
+```
+
+| Layer | What it does |
+|---|---|
+| `python/clean.py` | The notebook's cleaning rules as a script: splits producers from injectors, sets negative water to missing, caps uptime at 100%, adds 24-hour rates, rolls up to months |
+| `dbt/models/staging/` | `stg_daily_production`, `stg_daily_injection`: typed, renamed, one row per well per day |
+| `dbt/models/marts/` | `dim_wells`, `well_kpis`, `injector_kpis`, `field_monthly`, `water_cut_milestones`, `downtime_by_well_year`, `prod_vs_injection`, `injection_correlation` |
+| `dbt/tests/` | The 10 checks from `sql/02_checks.sql` as dbt tests (errors fail the build, warnings report counts), plus key, range and accepted-value tests on every mart |
+| `.github/workflows/ci.yml` | On every push and pull request: unit tests, cleaning, a check that committed outputs are reproducible, `dbt build`, the real-time quality-rule tests, and a `docker-compose.yml` check |
+
+- **Same numbers, now tested.** Every mart matches the SQLite view it replaces row for row, and the warning counts match the data-quality table below.
+- **The README is guarded.** `assert_readme_correlations` fails the build if a change moves the 0.55 / 0.76 / 0.71 correlations, so a headline number can't drift silently.
+- **Cloud-ready.** DuckDB runs locally with no setup; moving to a cloud warehouse means adding a target to `dbt/profiles.yml`, not rewriting the models.
+
+---
+
 ## SQL layer (`sql/`, SQLite)
+
+The original SQL layer, kept for reference. The dbt project above replaces it as the main path.
 
 `python/load_sqlite.py` builds `data/volve.db` from the cleaned producer data and the raw injector records, runs the data-quality checks, and creates the views.
 
@@ -240,21 +268,32 @@ volve-production-analytics/
 │   │   └── Volve production data.xlsx
 │   ├── processed/
 │   │   ├── production_daily_clean.csv   ← daily producer records + KPI columns
+│   │   ├── injection_daily_clean.csv    ← daily injector records + KPI columns
 │   │   ├── monthly_production.csv       ← monthly totals per producing well
 │   │   ├── monthly_injection.csv        ← monthly totals per injector
 │   │   └── decline_*.csv                ← backtest, forecast and F-11 sensitivity results
+│   ├── volve.duckdb                     ← dbt warehouse, built by `make pipeline` (not committed)
 │   └── volve.db                         ← built by python/load_sqlite.py (not committed)
 ├── images/                              ← charts exported from the notebook
 ├── notebooks/
 │   ├── 01_data_cleaning_eda.ipynb
 │   └── 02_decline_curve_analysis.ipynb
+├── dbt/                                 ← warehouse models and data tests (DuckDB)
+│   ├── models/staging/
+│   ├── models/marts/
+│   └── tests/
 ├── python/
+│   ├── clean.py                         ← raw Excel → data/processed/
 │   ├── load_sqlite.py
 │   └── decline_curves.py
 ├── sql/
 │   ├── 01_schema.sql
 │   ├── 02_checks.sql
 │   └── 03_views.sql
+├── tests/                               ← unit tests for clean.py
+├── .github/workflows/ci.yml             ← CI: tests, pipeline, dbt build
+├── Makefile
+├── requirements.txt
 ├── realtime/                            ← live sensor feed + data-quality monitor (see realtime/README.md)
 └── README.md
 ```
@@ -262,9 +301,17 @@ volve-production-analytics/
 ## How to run
 
 ```
-pip install pandas numpy scipy matplotlib openpyxl jupyter
+pip install -r requirements.txt
+
+# Batch pipeline: clean the raw file, build and test the warehouse
+make pipeline            # or: python python/clean.py && cd dbt && dbt build --profiles-dir .
+make test                # unit tests
+
+# Query the warehouse
+python -c "import duckdb; duckdb.connect('data/volve.duckdb').sql('SELECT * FROM well_kpis').show()"
 
 # Notebook
+pip install jupyter
 cd notebooks
 jupyter notebook 01_data_cleaning_eda.ipynb
 

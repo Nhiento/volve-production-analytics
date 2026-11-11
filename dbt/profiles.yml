@@ -1,0 +1,10 @@
+# Local warehouse: a single DuckDB file, rebuilt from data/processed/ on every run.
+# Moving to a cloud warehouse later means adding a second target here
+# (e.g. Fabric, Snowflake, or MotherDuck); the models stay the same.
+volve:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: ../data/volve.duckdb
+      threads: 4
