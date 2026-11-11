@@ -1,0 +1,10 @@
+# Batch pipeline: cleaning, dbt warehouse, decline curves, tests.
+# The real-time layer has its own list in realtime/requirements.txt.
+pandas>=2.0
+numpy>=1.26
+openpyxl>=3.1
+scipy>=1.11
+matplotlib>=3.8
+dbt-core>=1.10,<2.0
+dbt-duckdb>=1.10,<2.0
+pytest>=8.0

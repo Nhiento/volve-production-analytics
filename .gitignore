@@ -6,3 +6,11 @@ data/volve.db
 # real-time layer outputs
 realtime/reports/
 !realtime/reports/.gitkeep
+
+# dbt / DuckDB warehouse (rebuilt by `make pipeline`)
+data/volve.duckdb
+data/volve.duckdb.wal
+dbt/target/
+dbt/logs/
+dbt/.user.yml
+logs/

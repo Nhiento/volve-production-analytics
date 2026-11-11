@@ -1,0 +1,15 @@
+version: 2
+
+sources:
+  - name: processed
+    description: >
+      Cleaned daily records written by python/clean.py from the raw Equinor file.
+      DuckDB reads the CSVs in place; nothing is copied in by hand.
+    config:
+      meta:
+        external_location: "read_csv('../data/processed/{name}.csv', header = true, auto_detect = true)"
+    tables:
+      - name: production_daily_clean
+        description: One row per oil producer per day (WELL_TYPE = OP, FLOW_KIND = production).
+      - name: injection_daily_clean
+        description: One row per water injector per day (WELL_TYPE = WI, FLOW_KIND = injection).

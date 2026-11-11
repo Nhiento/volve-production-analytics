@@ -1,0 +1,61 @@
+version: 2
+
+# The data-quality checks from sql/02_checks.sql, expressed as dbt tests.
+# severity: error fails the build; severity: warn reports a count and continues.
+
+models:
+  - name: stg_daily_production
+    description: Daily oil producer records. One row per well per day.
+    tests:
+      - unique_combination:                       # check 1: duplicate well-days
+          arguments:
+            columns: [prod_date, well_name]
+    columns:
+      - name: prod_date
+        tests: [not_null]
+      - name: well_name
+        tests: [not_null]
+      - name: oil_vol
+        tests: [not_negative]                     # check 2: negative volumes
+      - name: gas_vol
+        tests: [not_negative]
+      - name: water_vol
+        tests:
+          - not_negative
+          - not_null:                             # check 6: missing water volume
+              config: {severity: warn}
+      - name: on_stream_hrs
+        tests:
+          - not_above:                            # check 3: more than 24 on-stream hours
+              arguments:
+                max_value: 24
+              config: {severity: warn}
+      - name: uptime_pct
+        tests:
+          - not_negative
+          - not_above:
+              arguments:
+                max_value: 100
+
+  - name: stg_daily_injection
+    description: Daily water injector records. One row per well per day.
+    tests:
+      - unique_combination:
+          arguments:
+            columns: [inj_date, well_name]
+    columns:
+      - name: inj_date
+        tests: [not_null]
+      - name: well_name
+        tests: [not_null]
+      - name: water_injected
+        tests: [not_negative]                     # check 9: negative injection
+      - name: on_stream_hrs
+        tests:
+          - not_null:                             # check 8: missing on-stream hours
+              config: {severity: warn}
+      - name: uptime_pct
+        tests:
+          - not_above:
+              arguments:
+                max_value: 100
