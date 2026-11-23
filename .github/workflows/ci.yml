@@ -24,9 +24,12 @@ jobs:
       - name: Clean raw data
         run: python python/clean.py
 
+      - name: Monthly totals
+        run: python python/monthly_totals.py
+
       - name: Committed outputs are reproducible
-        # Fails if someone edits the cleaning logic without regenerating data/processed/
-        run: git diff --exit-code -- data/processed/
+        # Fails if someone edits the cleaning or summary logic without regenerating the CSVs
+        run: git diff --exit-code -- data/processed/ data/marts/
 
       - name: Build and test the warehouse
         working-directory: dbt

@@ -8,8 +8,9 @@ so the batch pipeline runs end to end without opening a notebook:
 Reads   data/raw/Volve production data.xlsx  (sheet "Daily Production Data")
 Writes  data/processed/production_daily_clean.csv   one row per producer well-day
         data/processed/injection_daily_clean.csv    one row per injector well-day
-        data/processed/monthly_production.csv       producer totals per well-month
-        data/processed/monthly_injection.csv        injector totals per well-month
+
+This step only records what happened, corrected. Summaries built on top of it
+(monthly totals, decline curves, dbt marts) live in later steps.
 
 The notebook stays as the place to explore and explain; this script is what runs.
 """
@@ -64,36 +65,6 @@ def clean_injection(raw: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def month_start(dates: pd.Series) -> pd.Series:
-    return dates.dt.to_period("M").dt.to_timestamp()
-
-
-def monthly_production(prod: pd.DataFrame) -> pd.DataFrame:
-    m = (
-        prod.assign(MONTH=month_start(prod["DATEPRD"]))
-        .groupby(["MONTH", "NPD_WELL_BORE_NAME"], as_index=False)
-        .agg(
-            oil_volume=("BORE_OIL_VOL", "sum"),
-            gas_volume=("BORE_GAS_VOL", "sum"),
-            water_volume=("BORE_WAT_VOL", "sum"),
-            avg_uptime_pct=("UPTIME_PCT", "mean"),
-        )
-    )
-    m["WATER_CUT_PCT"] = m["water_volume"] / (m["oil_volume"] + m["water_volume"]) * 100
-    return m
-
-
-def monthly_injection(inj: pd.DataFrame) -> pd.DataFrame:
-    return (
-        inj.assign(MONTH=month_start(inj["DATEPRD"]))
-        .groupby(["MONTH", "NPD_WELL_BORE_NAME"], as_index=False)
-        .agg(
-            water_injected=("BORE_WI_VOL", "sum"),
-            avg_uptime_pct=("UPTIME_PCT", "mean"),
-        )
-    )
-
-
 def main() -> None:
     raw = read_raw()
     prod = clean_production(raw)
@@ -102,8 +73,6 @@ def main() -> None:
     outputs = {
         "production_daily_clean.csv": prod,
         "injection_daily_clean.csv": inj,
-        "monthly_production.csv": monthly_production(prod),
-        "monthly_injection.csv": monthly_injection(inj),
     }
     OUT.mkdir(parents=True, exist_ok=True)
     for name, df in outputs.items():

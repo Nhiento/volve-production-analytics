@@ -1,4 +1,5 @@
-"""Unit tests for python/clean.py. Uses a few hand-made rows, not the real file.
+"""Unit tests for python/clean.py and python/monthly_totals.py.
+Uses a few hand-made rows, not the real file.
 
 Run from the project folder:
     python -m pytest -q tests
@@ -11,7 +12,8 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
-from clean import clean_injection, clean_production, monthly_production  # noqa: E402
+from clean import clean_injection, clean_production  # noqa: E402
+from monthly_totals import monthly_production  # noqa: E402
 
 
 def raw_rows(rows):
