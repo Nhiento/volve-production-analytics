@@ -182,18 +182,22 @@ Notebook: `notebooks/02_decline_curve_analysis.ipynb` · code: `python/decline_c
 The analysis above started in notebooks. The batch pipeline makes it repeatable: one command rebuilds everything from the raw file, and every run is tested.
 
 ```
-raw Excel ──► python/clean.py ──► data/processed/*.csv ──► dbt (DuckDB) ──► staging views ──► mart tables
-                 7 unit tests                                49 data tests
+                                                      ┌──► python/monthly_totals.py, decline_curves.py ──► data/marts/*.csv
+raw Excel ──► python/clean.py ──► data/processed/*.csv ┤
+                 7 unit tests                         └──► dbt (DuckDB) ──► staging views ──► mart tables
+                                                                     49 data tests
 ```
 
 | Layer | What it does |
 |---|---|
-| `python/clean.py` | The notebook's cleaning rules as a script: splits producers from injectors, sets negative water to missing, caps uptime at 100%, adds 24-hour rates, rolls up to months |
+| `python/clean.py` | The notebook's cleaning rules as a script: splits producers from injectors, sets negative water to missing, caps uptime at 100%, adds 24-hour rates. Writes only the cleaned daily records |
+| `python/monthly_totals.py`, `python/decline_curves.py` | Python-built summaries that read the cleaned records and write to `data/marts/`: monthly totals per well, and the decline-curve backtest, forecast and sensitivity (curve fitting sits better in Python than SQL) |
 | `dbt/models/staging/` | `stg_daily_production`, `stg_daily_injection`: typed, renamed, one row per well per day |
 | `dbt/models/marts/` | `dim_wells`, `well_kpis`, `injector_kpis`, `field_monthly`, `water_cut_milestones`, `downtime_by_well_year`, `prod_vs_injection`, `injection_correlation` |
 | `dbt/tests/` | The 10 checks from `sql/02_checks.sql` as dbt tests (errors fail the build, warnings report counts), plus key, range and accepted-value tests on every mart |
 | `.github/workflows/ci.yml` | On every push and pull request: unit tests, cleaning, a check that committed outputs are reproducible, `dbt build`, the real-time quality-rule tests, and a `docker-compose.yml` check |
 
+- **Layered like a medallion architecture.** The raw file is never edited; `data/processed/` holds cleaned facts only; every summary, whether a dbt mart or a Python output in `data/marts/`, is built on top of it. Analysis choices such as ignoring rates from runs under 2 hours live in the summaries, so they can change without touching the cleaned data.
 - **Same numbers, now tested.** Every mart matches the SQLite view it replaces row for row, and the warning counts match the data-quality table below.
 - **The README is guarded.** `assert_readme_correlations` fails the build if a change moves the 0.55 / 0.76 / 0.71 correlations, so a headline number can't drift silently.
 - **Cloud-ready.** DuckDB runs locally with no setup; moving to a cloud warehouse means adding a target to `dbt/profiles.yml`, not rewriting the models.
@@ -266,9 +270,10 @@ volve-production-analytics/
 ├── data/
 │   ├── raw/
 │   │   └── Volve production data.xlsx
-│   ├── processed/
+│   ├── processed/                       ← cleaned layer: corrected daily records only
 │   │   ├── production_daily_clean.csv   ← daily producer records + KPI columns
-│   │   ├── injection_daily_clean.csv    ← daily injector records + KPI columns
+│   │   └── injection_daily_clean.csv    ← daily injector records + KPI columns
+│   ├── marts/                           ← Python-built summaries (dbt marts live in DuckDB)
 │   │   ├── monthly_production.csv       ← monthly totals per producing well
 │   │   ├── monthly_injection.csv        ← monthly totals per injector
 │   │   └── decline_*.csv                ← backtest, forecast and F-11 sensitivity results
@@ -284,13 +289,14 @@ volve-production-analytics/
 │   └── tests/
 ├── python/
 │   ├── clean.py                         ← raw Excel → data/processed/
-│   ├── load_sqlite.py
-│   └── decline_curves.py
+│   ├── monthly_totals.py                ← data/processed/ → data/marts/monthly_*.csv
+│   ├── decline_curves.py                ← data/processed/ → data/marts/decline_*.csv + charts
+│   └── load_sqlite.py                   ← earlier SQLite version (sql/), kept for reference
 ├── sql/
 │   ├── 01_schema.sql
 │   ├── 02_checks.sql
 │   └── 03_views.sql
-├── tests/                               ← unit tests for clean.py
+├── tests/                               ← unit tests for clean.py and monthly_totals.py
 ├── .github/workflows/ci.yml             ← CI: tests, pipeline, dbt build
 ├── Makefile
 ├── requirements.txt
@@ -303,8 +309,8 @@ volve-production-analytics/
 ```
 pip install -r requirements.txt
 
-# Batch pipeline: clean the raw file, build and test the warehouse
-make pipeline            # or: python python/clean.py && cd dbt && dbt build --profiles-dir .
+# Batch pipeline: clean the raw file, build the Python summaries, build and test the warehouse
+make pipeline            # or run python/clean.py, python/monthly_totals.py, python/decline_curves.py, then: cd dbt && dbt build --profiles-dir .
 make test                # unit tests
 
 # Query the warehouse
@@ -319,6 +325,6 @@ jupyter notebook 01_data_cleaning_eda.ipynb
 python python/load_sqlite.py
 sqlite3 data/volve.db "SELECT * FROM vw_well_kpis;"
 
-# Decline curves (rebuilds the decline_*.csv results and both charts)
+# Decline curves only (rebuilds data/marts/decline_*.csv and both charts)
 python python/decline_curves.py
 ```

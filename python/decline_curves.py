@@ -17,7 +17,7 @@ from scipy.optimize import curve_fit
 
 ROOT = Path(__file__).resolve().parents[1]
 DAILY = ROOT / "data" / "processed" / "production_daily_clean.csv"
-OUT_DIR = ROOT / "data" / "processed"
+OUT_DIR = ROOT / "data" / "marts"
 IMG_DIR = ROOT / "images"
 
 WELLS = ["15/9-F-12", "15/9-F-14", "15/9-F-11"]
